@@ -1,0 +1,40 @@
+@Metadata.layer: #CORE
+@UI.headerInfo.typeName: 'Role'
+annotate entity Z_C_ROLE with
+{
+
+  @UI.facet: [
+    {
+      id: 'RoleDetails',
+      purpose: #STANDARD,
+      type: #IDENTIFICATION_REFERENCE,
+      label: 'Role Details',
+      position: 10
+    }
+  ]
+
+  @UI.lineItem: [{ position: 10 }]
+  @UI.identification: [{ position: 10 }]
+  Partner;
+
+  @Consumption.valueHelpDefinition: [
+  { entity: { name: 'Z_I_TB003', element: 'Role' }, useForValidation: true }
+  ]
+  @UI.lineItem: [{ position: 20 }]
+  @UI.identification: [{ position: 20 }]
+  Rltyp;
+
+  @UI.identification: [{ position: 30 }]
+  Dfval;
+
+  @UI.lineItem: [{ position: 40 }]
+  @UI.identification: [{ position: 40 }]
+  ValidFrom;
+
+  @UI.lineItem: [{ position: 50 }]
+  @UI.identification: [{ position: 50 }]
+  ValidTo;
+  //    /* Associations */
+  //    _Root;
+
+}

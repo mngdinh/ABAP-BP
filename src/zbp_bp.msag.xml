@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_MSAG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <T100A>
+    <ARBGB>ZBP_BP</ARBGB>
+    <MASTERLANG>E</MASTERLANG>
+    <STEXT>Message Class for Business Partner (BUT000)</STEXT>
+   </T100A>
+   <T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_BP</ARBGB>
+     <MSGNR>001</MSGNR>
+     <TEXT>Partner is required</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_BP</ARBGB>
+     <MSGNR>002</MSGNR>
+     <TEXT>Insert BUT000 failed</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_BP</ARBGB>
+     <MSGNR>003</MSGNR>
+     <TEXT>Update BUT000 failed for &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_BP</ARBGB>
+     <MSGNR>004</MSGNR>
+     <TEXT>Delete BUT000 failed for &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_BP</ARBGB>
+     <MSGNR>009</MSGNR>
+     <TEXT>Partner &amp;1 already exists</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_BP</ARBGB>
+     <MSGNR>010</MSGNR>
+     <TEXT>Partner (key) is required for update</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_BP</ARBGB>
+     <MSGNR>011</MSGNR>
+     <TEXT>Partner &amp;1 not found</TEXT>
+    </T100>
+   </T100>
+  </asx:values>
+ </asx:abap>
+</abapGit>

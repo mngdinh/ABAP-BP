@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_MSAG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <T100A>
+    <ARBGB>ZBP_ROLE</ARBGB>
+    <MASTERLANG>E</MASTERLANG>
+    <STEXT>Message Class for Business Partner Role (BUT100)</STEXT>
+   </T100A>
+   <T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_ROLE</ARBGB>
+     <MSGNR>001</MSGNR>
+     <TEXT>Partner and Role type are required</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_ROLE</ARBGB>
+     <MSGNR>002</MSGNR>
+     <TEXT>Insert BUT100 failed for &amp;1/&amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_ROLE</ARBGB>
+     <MSGNR>003</MSGNR>
+     <TEXT>Update BUT100 failed for &amp;1/&amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_ROLE</ARBGB>
+     <MSGNR>004</MSGNR>
+     <TEXT>Delete BUT100 failed for &amp;1/&amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>ZBP_ROLE</ARBGB>
+     <MSGNR>009</MSGNR>
+     <TEXT>Role &amp;1/&amp;2 already exists</TEXT>
+    </T100>
+   </T100>
+  </asx:values>
+ </asx:abap>
+</abapGit>

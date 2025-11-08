@@ -1,0 +1,121 @@
+@Metadata.layer: #CORE
+@UI.headerInfo.typeName: 'Bussiness Partner'
+annotate entity Z_C_ROOT with
+{
+  @UI.facet: [
+  {
+  id: 'Partner',
+  purpose: #STANDARD,
+  position: 10,
+  label: 'Business Partner',
+  type: #IDENTIFICATION_REFERENCE
+  },
+  {
+  id: 'Role',
+  purpose: #STANDARD,
+  position: 20,
+  label: 'Business Partner Role',
+  type: #LINEITEM_REFERENCE,
+  targetElement: '_Role'
+  },
+  {
+  id: 'Address',
+  purpose: #STANDARD,
+  position: 30,
+  label: 'Address',
+  type: #LINEITEM_REFERENCE,
+  targetElement: '_Addr'
+  }
+  ]
+  @Consumption.valueHelpDefinition: [
+  { entity: { name: 'Z_I_SEARCHHELP', element: 'Partner' }, useForValidation: true }
+  ]
+  @UI.lineItem: [{ position: 10 }]
+  @UI.selectionField: [{ position: 10 }]
+  @UI.identification: [{ position: 10 }]
+  Partner;  
+
+  @Consumption.valueHelpDefinition: [
+  { entity: { name: 'Z_I_SEARCHHELP', element: 'Type' } }
+  ]
+  @UI.lineItem: [{ position: 20 }]
+  @UI.selectionField: [{ position: 20 }]
+  @UI.identification: [{ position: 15 }]
+  Type;
+
+  @Consumption.valueHelpDefinition: [
+  { entity: { name: 'Z_I_GROUPING', element: 'BuGroup' }, useForValidation: true }
+  ]
+  @UI.lineItem: [{ position: 30 }]
+  @UI.selectionField: [{ position: 30 }]
+  @UI.identification: [{ position: 20 }]
+  BuGroup;
+
+//  @Consumption.valueHelpDefinition: [
+//  { entity: { name: 'Z_I_SEARCHHELP', element: 'BuSort1' }, useForValidation: true }
+//  ]
+  @UI.lineItem: [{ position: 40 }]
+  @UI.identification: [{ position: 25 }]
+  BuSort1;
+
+  @UI.lineItem: [{ position: 45 }]
+  @UI.identification: [{ position: 30 }]
+  BuSort2;
+
+  @Consumption.valueHelpDefinition: [
+  { entity: { name: 'Z_I_TITLE', element: 'Title' }, useForValidation: true }
+  ]
+  @UI.lineItem: [{ position: 50 }]
+  @UI.identification: [{ position: 35 }]
+  Title;
+
+  @UI.lineItem: [{ position: 60 }]
+  @UI.identification: [{ position: 40 }]
+  NameOrg1;
+
+  @UI.lineItem: [{ position: 70 }]
+  @UI.identification: [{ position: 40 }]
+  NameOrg2;
+
+  @UI.lineItem: [{ position: 80 }]
+  @UI.identification: [{ position: 45 }]
+  NameLast;
+
+  @UI.lineItem: [{ position: 90 }]
+  @UI.identification: [{ position: 50 }]
+  NameFirst;
+
+  @UI.identification: [{ position: 55 }]
+  Namemiddle;
+
+  @UI.identification: [{ position: 60 }]
+  @UI.hidden: true
+  Crusr;
+
+  @UI.identification: [{ position: 65 }]
+  @UI.hidden: true
+  Crdat;
+
+  @UI.identification: [{ position: 70 }]
+  @UI.hidden: true
+  Crtim;
+
+  @UI.identification: [{ position: 75 }]
+  @UI.hidden: true
+  Chusr;
+
+  @UI.identification: [{ position: 80 }]
+  @UI.hidden: true
+  Chdat;
+
+  @UI.identification: [{ position: 85 }]
+  @UI.hidden: true
+  Chtim;
+
+  @UI.identification: [{ position: 90 }]
+  @UI.hidden: true
+  DeletionFlag;
+  /* Associations */
+  //    _Role;
+
+}

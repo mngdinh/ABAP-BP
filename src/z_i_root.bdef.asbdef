@@ -1,0 +1,86 @@
+ unmanaged implementation in class zbp_i_root unique;
+ //strict ( 2 );
+
+ define behavior for Z_I_ROOT alias BussinessPartner
+ lock master
+ authorization master ( instance )
+ //etag master <field_name>
+ {
+   mapping for but000 corresponding
+   {
+     Partner = partner;
+     Type = type;
+     BuGroup = bu_group;
+     BuSort1 = bu_sort1;
+     BuSort2 = bu_sort2;
+     Title = title;
+     NameOrg1 = name_org1;
+     NameOrg2 = name_org2;
+     NameLast = name_last;
+     NameFirst = name_first;
+     Namemiddle = namemiddle;
+     Crusr = crusr;
+     Crdat = crdat;
+     Crtim = crtim;
+     Chusr = chusr;
+     Chdat = chdat;
+     Chtim = chtim;
+     DeletionFlag = xdele;
+   }
+
+   create;
+   update;
+   delete;
+   field ( readonly ) Partner;
+   association _Role { create; }
+   association _Addr { create; }
+ }
+
+ define behavior for Z_I_ROLE alias Role
+ lock dependent by _Root
+ authorization dependent by _Root
+ //etag master <field_name>
+ {
+   mapping for but100 corresponding
+   {
+     Partner = partner;
+     Rltyp = rltyp;
+     Dfval = dfval;
+     ValidFrom = valid_from;
+     ValidTo = valid_to;
+   }
+   create;
+   update;
+   delete;
+   field ( readonly ) Partner;
+   association _Root;
+ }
+
+ define behavior for Z_I_ADRR alias Addr
+ lock dependent by _Root
+ authorization dependent by _Root
+ //etag master <field_name>
+ {
+
+   mapping for but020 corresponding
+   {
+     Partner = partner;
+     Addrnumber = addrnumber;
+   }
+   mapping for adrc corresponding
+   {
+     Addrnumber = addrnumber;
+     City = city1;
+     Country = country;
+     HouseNumber = house_num1;
+     NameCompany = name_co;
+     PostalCode = post_code1;
+     Region = region;
+     Street = street;
+   }
+   create;
+   update;
+   delete;
+   field ( readonly ) Partner, Addrnumber;
+   association _Root;
+ }
