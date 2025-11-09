@@ -38,7 +38,7 @@ ABAP-BP/
 ├── Core Data Service/              
 │   ├── Behavior Definition/                # Behavior Definition and Implementation
 │   └── Data Definition/                    # CDS View Entities: Z_I_ROOT, Z_I_ROLE, Z_C_ROOT
-│   └── Metadata Extension/                 # Các helper object (nếu có)
+│   └── Metadata Extension/                
 ├── Source Code Library/              
 │   └── Classes/  
 └── README.md
