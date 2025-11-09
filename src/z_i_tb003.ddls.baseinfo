@@ -3,7 +3,8 @@
 {
 "FROM":
 [
-"TB003"
+"TB003",
+"TB003T"
 ],
 "ASSOCIATED":
 [],

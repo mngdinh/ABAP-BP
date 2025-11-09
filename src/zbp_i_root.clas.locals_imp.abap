@@ -767,6 +767,10 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
         IF <f_namecompany> IS ASSIGNED. ls_bapiaddr-c_o_name   = <f_namecompany>. ENDIF.
         IF <f_housenumber> IS ASSIGNED. ls_bapiaddr-house_no   = <f_housenumber>. ENDIF.
 
+        ls_bapiaddr-langu       = sy-langu.
+        ls_bapiaddr-validfromdate  = sy-datum.
+        ls_bapiaddr-validtodate = '99991231'.
+
         " Gọi BAPI tạo địa chỉ
         CLEAR lt_msg.
         CALL FUNCTION 'BAPI_BUPA_ADDRESS_ADD'
@@ -944,11 +948,11 @@ CLASS lhc_role IMPLEMENTATION.
     DATA: lv_bp        TYPE bapibus1006_head-bpartner,
           lv_role      TYPE bu_role,
           lv_dfval_new TYPE bu_dfval,
-          lv_from_new  TYPE bu_valid_from,
-          lv_to_new    TYPE bu_valid_to,
+          lv_from_new  TYPE bapibus1006_bprole_validity-bprolevalidfrom,
+          lv_to_new    TYPE bapibus1006_bprole_validity-bprolevalidto,
           lv_dfval_old TYPE bu_dfval,
           ls_cent      TYPE bapibus1006_central,
-          lt_msg       TYPE TABLE OF bapiret2,
+          lt_msg       TYPE STANDARD TABLE OF bapiret2,
           ls_msg       TYPE bapiret2.
 
     LOOP AT entities ASSIGNING FIELD-SYMBOL(<e>).
@@ -1015,53 +1019,28 @@ CLASS lhc_role IMPLEMENTATION.
 
       "--- get new payload (safe defaults)
       lv_dfval_new = <e>-dfval.
+      DATA(lv_frnew_str) = <e>-validfrom.
+      DATA(lv_tonew_str) = <e>-validto.
 
       IF <e>-validfrom IS INITIAL.
         lv_from_new = sy-datum.
       ELSE.
-        lv_from_new = <e>-validfrom.
+        lv_from_new = lv_frnew_str(8).
       ENDIF.
 
       IF <e>-validto IS INITIAL.
         lv_to_new = '99991231'.
       ELSE.
-        lv_to_new = <e>-validto.
+        lv_to_new = lv_tonew_str(8).
       ENDIF.
 
       IF lv_to_new < lv_from_new.
         lv_to_new = lv_from_new.
       ENDIF.
 
-      " delete old
-      CLEAR lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_ROLE_DELETE_2'
-        EXPORTING
-          businesspartner          = lv_bp
-          businesspartnerrole      = lv_role
-          differentiationtypevalue = lv_dfval_old
-        TABLES
-          return                   = lt_msg.
+      CLEAR: lt_msg.
 
-      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
-          APPEND VALUE #(
-            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
-            %msg = new_message(
-                     id       = ls_msg-id
-                     number   = ls_msg-number
-                     severity = if_abap_behv_message=>severity-error
-                     v1       = ls_msg-message_v1
-                     v2       = ls_msg-message_v2
-                     v3       = ls_msg-message_v3
-                     v4       = ls_msg-message_v4 ) )
-          TO reported-role.
-        ENDLOOP.
-        CONTINUE.
-      ENDIF.
-
-      " add new
-      CLEAR lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_ROLE_ADD_2'
+      CALL FUNCTION 'BAPI_BUPA_ROLE_CHANGE'
         EXPORTING
           businesspartner          = lv_bp
           businesspartnerrole      = lv_role
@@ -1072,9 +1051,178 @@ CLASS lhc_role IMPLEMENTATION.
           return                   = lt_msg.
 
       IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+*        CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
         LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
           APPEND VALUE #(
-            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+            %tky = <e>-%tky
+            %msg = new_message(
+              id       = ls_msg-id
+              number   = ls_msg-number
+              severity = if_abap_behv_message=>severity-error
+              v1       = ls_msg-message_v1
+              v2       = ls_msg-message_v2
+              v3       = ls_msg-message_v3
+              v4       = ls_msg-message_v4 )
+          ) TO reported-role.
+        ENDLOOP.
+      ELSE.
+*        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+      ENDIF.
+
+*      " delete old
+*      CLEAR lt_msg.
+*      CALL FUNCTION 'BAPI_BUPA_ROLE_REMOVE'
+*        EXPORTING
+*          businesspartner          = lv_bp
+*          businesspartnerrole      = lv_role
+*        TABLES
+*          return                   = lt_msg.
+*
+*      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+*        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+*          APPEND VALUE #(
+*            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+*            %msg = new_message(
+*                     id       = ls_msg-id
+*                     number   = ls_msg-number
+*                     severity = if_abap_behv_message=>severity-error
+*                     v1       = ls_msg-message_v1
+*                     v2       = ls_msg-message_v2
+*                     v3       = ls_msg-message_v3
+*                     v4       = ls_msg-message_v4 ) )
+*          TO reported-role.
+*        ENDLOOP.
+*        CONTINUE.
+*      ELSE.
+**        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+*      ENDIF.
+*
+*      " add new
+*      CLEAR lt_msg.
+*      CALL FUNCTION 'BAPI_BUPA_ROLE_ADD_2'
+*        EXPORTING
+*          businesspartner          = lv_bp
+*          businesspartnerrole      = lv_role
+*          differentiationtypevalue = lv_dfval_new
+*          validfromdate            = lv_from_new
+*          validuntildate           = lv_to_new
+*        TABLES
+*          return                   = lt_msg.
+*
+*      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+*        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+*          APPEND VALUE #(
+*            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+*            %msg = new_message(
+*                     id       = ls_msg-id
+*                     number   = ls_msg-number
+*                     severity = if_abap_behv_message=>severity-error
+*                     v1       = ls_msg-message_v1
+*                     v2       = ls_msg-message_v2
+*                     v3       = ls_msg-message_v3
+*                     v4       = ls_msg-message_v4 ) )
+*          TO reported-role.
+*        ENDLOOP.
+*        CONTINUE.
+*      ELSE.
+**        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+*      ENDIF.
+
+      APPEND VALUE #(
+        %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+        %msg = new_message_with_text(
+                 severity = if_abap_behv_message=>severity-success
+                 text     = |Role { lv_role } updated for BP { lv_bp }.| ) )
+      TO reported-role.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD delete.
+
+    DATA: lv_bp    TYPE bapibus1006_head-bpartner,
+          lv_role  TYPE bu_role,
+          lv_dfval TYPE bu_dfval,
+          ls_cent  TYPE bapibus1006_central,
+          lt_msg   TYPE TABLE OF bapiret2,
+          ls_msg   TYPE bapiret2.
+
+    LOOP AT keys ASSIGNING FIELD-SYMBOL(<k>).
+
+      IF <k>-partner IS INITIAL OR <k>-rltyp IS INITIAL.
+        APPEND VALUE #( %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp ) )
+          TO failed-role.
+        APPEND VALUE #(
+          %msg = new_message(
+                   id       = 'ZBP_ROLE'
+                   number   = '001'
+                   severity = if_abap_behv_message=>severity-error ) )
+          TO reported-role.
+        CONTINUE.
+      ENDIF.
+
+      lv_bp   = <k>-partner.
+      lv_role = <k>-rltyp.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = lv_bp
+        IMPORTING
+          output = lv_bp.
+
+      " block if archived
+      CLEAR: ls_cent, lt_msg.
+      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
+        EXPORTING
+          businesspartner = lv_bp
+        IMPORTING
+          centraldata     = ls_cent
+        TABLES
+          return          = lt_msg.
+      IF ls_cent-centralarchivingflag = 'X'.
+        APPEND VALUE #( %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp ) )
+          TO failed-role.
+        APPEND VALUE #(
+          %msg = new_message_with_text(
+                   severity = if_abap_behv_message=>severity-error
+                   text     = |BP { lv_bp } is archived. Cannot delete role.| ) )
+          TO reported-role.
+        CONTINUE.
+      ENDIF.
+
+      " read dfval (nếu hệ yêu cầu khi delete)
+      SELECT SINGLE dfval
+        FROM but100
+        WHERE partner = @lv_bp
+          AND rltyp   = @lv_role
+        INTO @lv_dfval.
+      IF sy-subrc <> 0.
+        APPEND VALUE #( %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp ) )
+          TO failed-role.
+        APPEND VALUE #(
+          %msg = new_message(
+                   id       = 'ZBP_ROLE'
+                   number   = '009'
+                   severity = if_abap_behv_message=>severity-error
+                   v1       = <k>-partner
+                   v2       = <k>-rltyp ) )
+          TO reported-role.
+        CONTINUE.
+      ENDIF.
+
+      CLEAR lt_msg.
+      CALL FUNCTION 'BAPI_BUPA_ROLE_REMOVE'
+        EXPORTING
+          businesspartner          = lv_bp
+          businesspartnerrole      = lv_role
+          differentiationtypevalue = lv_dfval
+        TABLES
+          return                   = lt_msg.
+
+
+      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #(
+            %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp )
             %msg = new_message(
                      id       = ls_msg-id
                      number   = ls_msg-number
@@ -1089,122 +1237,13 @@ CLASS lhc_role IMPLEMENTATION.
       ENDIF.
 
       APPEND VALUE #(
-        %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+        %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp )
         %msg = new_message_with_text(
                  severity = if_abap_behv_message=>severity-success
-                 text     = |Role { lv_role } updated for BP { lv_bp }.| ) )
+                 text     = |Role { lv_role } deleted for BP { lv_bp }.| ) )
       TO reported-role.
 
     ENDLOOP.
-
-  ENDMETHOD.
-
-
-  METHOD delete.
-*
-*    DATA: lv_bp    TYPE bapibus1006_head-bpartner,
-*          lv_role  TYPE bu_role,
-*          lv_dfval TYPE bu_dfval,
-*          ls_cent  TYPE bapibus1006_central,
-*          lt_msg   TYPE TABLE OF bapiret2,
-*          ls_msg   TYPE bapiret2.
-*
-*    LOOP AT keys ASSIGNING FIELD-SYMBOL(<k>).
-*
-*      IF <k>-partner IS INITIAL OR <k>-rltyp IS INITIAL.
-*        APPEND VALUE #( %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp ) )
-*          TO failed-role.
-*        APPEND VALUE #(
-*          %msg = new_message(
-*                   id       = 'ZBP_ROLE'
-*                   number   = '001'
-*                   severity = if_abap_behv_message=>severity-error ) )
-*          TO reported-role.
-*        CONTINUE.
-*      ENDIF.
-*
-*      lv_bp   = <k>-partner.
-*      lv_role = <k>-rltyp.
-*      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
-*        EXPORTING
-*          input  = lv_bp
-*        IMPORTING
-*          output = lv_bp.
-*
-*      " block if archived
-*      CLEAR: ls_cent, lt_msg.
-*      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-*        EXPORTING
-*          businesspartner = lv_bp
-*        IMPORTING
-*          centraldata     = ls_cent
-*        TABLES
-*          return          = lt_msg.
-*      IF ls_cent-centralarchivingflag = 'X'.
-*        APPEND VALUE #( %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp ) )
-*          TO failed-role.
-*        APPEND VALUE #(
-*          %msg = new_message_with_text(
-*                   severity = if_abap_behv_message=>severity-error
-*                   text     = |BP { lv_bp } is archived. Cannot delete role.| ) )
-*          TO reported-role.
-*        CONTINUE.
-*      ENDIF.
-*
-*      " read dfval (nếu hệ yêu cầu khi delete)
-*      SELECT SINGLE dfval
-*        FROM but100
-*        WHERE partner = @lv_bp
-*          AND rltyp   = @lv_role
-*        INTO @lv_dfval.
-*      IF sy-subrc <> 0.
-*        APPEND VALUE #( %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp ) )
-*          TO failed-role.
-*        APPEND VALUE #(
-*          %msg = new_message(
-*                   id       = 'ZBP_ROLE'
-*                   number   = '009'
-*                   severity = if_abap_behv_message=>severity-error
-*                   v1       = <k>-partner
-*                   v2       = <k>-rltyp ) )
-*          TO reported-role.
-*        CONTINUE.
-*      ENDIF.
-*
-*      CLEAR lt_msg.
-*      CALL FUNCTION 'BAPI_BUPA_ROLE_DELETE_2'
-*        EXPORTING
-*          businesspartner          = lv_bp
-*          businesspartnerrole      = lv_role
-*          differentiationtypevalue = lv_dfval
-*        TABLES
-*          return                   = lt_msg.
-*
-*      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-*        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
-*          APPEND VALUE #(
-*            %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp )
-*            %msg = new_message(
-*                     id       = ls_msg-id
-*                     number   = ls_msg-number
-*                     severity = if_abap_behv_message=>severity-error
-*                     v1       = ls_msg-message_v1
-*                     v2       = ls_msg-message_v2
-*                     v3       = ls_msg-message_v3
-*                     v4       = ls_msg-message_v4 ) )
-*          TO reported-role.
-*        ENDLOOP.
-*        CONTINUE.
-*      ENDIF.
-*
-*      APPEND VALUE #(
-*        %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp )
-*        %msg = new_message_with_text(
-*                 severity = if_abap_behv_message=>severity-success
-*                 text     = |Role { lv_role } deleted for BP { lv_bp }.| ) )
-*      TO reported-role.
-*
-*    ENDLOOP.
 
   ENDMETHOD.
 
@@ -1493,32 +1532,33 @@ CLASS lhc_addr IMPLEMENTATION.
         ls_addr-c_o_name   = <e>-namecompany. ls_addrx-c_o_name   = 'X'.
       ENDIF.
 
-      " change
-      CLEAR lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_ADDRESS_CHANGE'
-        EXPORTING
-          businesspartner = lv_bp
-          addressdata     = ls_addr
-          addressdata_x   = ls_addrx
-        TABLES
-          return          = lt_msg.
+*      " change
+*      CLEAR lt_msg.
+*      CALL FUNCTION 'BAPI_BUPA_ADDRESS_CHANGE'
+*        EXPORTING
+*          businesspartner = lv_bp
+*          addressdata     = ls_addr
+*          addressdata_x   = ls_addrx
+*        TABLES
+*          return          = lt_msg.
+*
+*      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+*        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+*          APPEND VALUE #(
+*            %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber )
+*            %msg = new_message(
+*                     id       = ls_msg-id
+*                     number   = ls_msg-number
+*                     severity = if_abap_behv_message=>severity-error
+*                     v1       = ls_msg-message_v1
+*                     v2       = ls_msg-message_v2
+*                     v3       = ls_msg-message_v3
+*                     v4       = ls_msg-message_v4 ) )
+*          TO reported-addr.
+*        ENDLOOP.
+*        CONTINUE.
+*      ENDIF.
 
-      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
-          APPEND VALUE #(
-            %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber )
-            %msg = new_message(
-                     id       = ls_msg-id
-                     number   = ls_msg-number
-                     severity = if_abap_behv_message=>severity-error
-                     v1       = ls_msg-message_v1
-                     v2       = ls_msg-message_v2
-                     v3       = ls_msg-message_v3
-                     v4       = ls_msg-message_v4 ) )
-          TO reported-addr.
-        ENDLOOP.
-        CONTINUE.
-      ENDIF.
 
       APPEND VALUE #(
         %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber )
