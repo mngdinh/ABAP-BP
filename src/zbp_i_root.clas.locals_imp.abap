@@ -158,61 +158,71 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
 
       "existence
       CLEAR lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_EXISTENCE_CHECK'
-        EXPORTING
-          businesspartner = lv_bp
-        TABLES
-          return          = lt_msg.
-
-      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-        APPEND VALUE #( %key = VALUE #( partner = <e>-partner ) ) TO failed-bussinesspartner.
-        APPEND VALUE #(
-          %msg = new_message( id = 'ZBP_BP' number = '011'
-                              severity = if_abap_behv_message=>severity-error
-                              v1 = |{ <e>-partner }| ) )
-          TO reported-bussinesspartner.
-        CONTINUE.
-      ENDIF.
-
-      "block update if archived
-      CLEAR: ls_cent, lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-        EXPORTING
-          businesspartner = lv_bp
-        IMPORTING
-          centraldata     = ls_cent
-        TABLES
-          return          = lt_msg.
-
-      lv_archived = ls_cent-centralarchivingflag.
-      IF lv_archived = 'X'.
+      DATA(ls_exist) = zcl_bp236_validation=>check_bp_existence( iv_bp = lv_bp ).
+      IF ls_exist-exists = abap_false.
         APPEND VALUE #( %key = VALUE #( partner = <e>-partner ) ) TO failed-bussinesspartner.
         APPEND VALUE #(
           %msg = new_message_with_text(
-                   severity = if_abap_behv_message=>severity-error
-                   text     = |Business Partner { lv_bp } is archived. Update is not allowed.| ) )
-          TO reported-bussinesspartner.
+                    severity = if_abap_behv_message=>severity-error
+                    text     = ls_exist-error_message )
+        ) TO reported-bussinesspartner.
+        CONTINUE.
+      ENDIF.
+
+      "check archived
+      CLEAR: ls_cent, lt_msg.
+      DATA(ls_archived) = zcl_bp236_validation=>check_bp_not_archived(
+            iv_bp = lv_bp
+            iv_action = zcl_bp236_validation=>c_action_update
+      ).
+      IF ls_archived-is_archived = abap_true.
+        APPEND VALUE #( %key = VALUE #( partner = <e>-partner ) ) TO failed-bussinesspartner.
+        APPEND VALUE #(
+                %msg = new_message_with_text(
+                        severity = if_abap_behv_message=>severity-error
+                        text     = ls_archived-error_message )
+        ) TO reported-role.
         CONTINUE.
       ENDIF.
 
       "map & X
-      CLEAR: ls_cent, ls_centx, ls_pers, ls_persx, ls_org, ls_orgx.
-
-      ls_cent-searchterm1 = <e>-busort1. ls_centx-searchterm1 = 'X'.
-      ls_cent-searchterm2 = <e>-busort2. ls_centx-searchterm2 = 'X'.
-      ls_cent-title_key   = <e>-title.   ls_centx-title_key   = 'X'.
+      CLEAR: ls_centx, ls_pers, ls_persx, ls_org, ls_orgx.
+      IF <e>-busort1 IS NOT INITIAL AND ls_cent-searchterm1 <> <e>-busort1.
+        ls_cent-searchterm1 = <e>-busort1. ls_centx-searchterm1 = 'X'.
+      ENDIF.
+      IF <e>-busort2 IS NOT INITIAL AND ls_cent-searchterm2 <> <e>-busort2.
+        ls_cent-searchterm2 = <e>-busort2. ls_centx-searchterm2 = 'X'.
+      ENDIF.
+      IF <e>-title IS NOT INITIAL AND ls_cent-title_key <> <e>-title.
+        ls_cent-title_key   = <e>-title.   ls_centx-title_key   = 'X'.
+      ENDIF.
 
       "Cân nhắc: thường KHÔNG đổi category/group; nếu cần, bật X bên dưới.
 *       ls_cent-partn_grp   = <e>-bugroup. ls_centx-partn_grp   = 'X'.
 *       ls_cent-partn_cat   = <e>-type.    ls_centx-partn_cat   = 'X'.
+      SELECT type, name_org1, name_org2, name_last, name_first, namemiddle
+      FROM but000
+      WHERE partner = @lv_bp
+      INTO @DATA(ls_but000).
+      ENDSELECT.
 
-      IF <e>-type = '1'.
-        ls_pers-firstname  = <e>-namefirst.  ls_persx-firstname  = 'X'.
-        ls_pers-lastname   = <e>-namelast.   ls_persx-lastname   = 'X'.
-        ls_pers-middlename = <e>-namemiddle. ls_persx-middlename = 'X'.
+      IF '1' = ls_but000-type.
+        IF <e>-namefirst IS NOT INITIAL AND <e>-namefirst <> ls_but000-name_first.
+          ls_pers-firstname  = <e>-namefirst.  ls_persx-firstname  = 'X'.
+        ENDIF.
+        IF <e>-namelast IS NOT INITIAL AND <e>-namelast <> ls_but000-name_last.
+          ls_pers-lastname   = <e>-namelast.   ls_persx-lastname   = 'X'.
+        ENDIF.
+        IF <e>-namemiddle IS NOT INITIAL AND <e>-namemiddle <> ls_but000-namemiddle.
+          ls_pers-middlename = <e>-namemiddle. ls_persx-middlename = 'X'.
+        ENDIF.
       ELSE.
-        ls_org-name1 = <e>-nameorg1. ls_orgx-name1 = 'X'.
-        ls_org-name2 = <e>-nameorg2. ls_orgx-name2 = 'X'.
+        IF <e>-nameorg1 IS NOT INITIAL AND <e>-nameorg1 <> ls_but000-name_org1.
+          ls_org-name1 = <e>-nameorg1. ls_orgx-name1 = 'X'.
+        ENDIF.
+        IF <e>-nameorg2 IS NOT INITIAL AND <e>-nameorg2 <> ls_but000-name_org2.
+          ls_org-name2 = <e>-nameorg2. ls_orgx-name2 = 'X'.
+        ENDIF.
       ENDIF.
 
       "change
@@ -288,24 +298,19 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
         IMPORTING
           output = lv_bp.
 
-      " check archived
+      "Check archived
       CLEAR: ls_cent, lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-        EXPORTING
-          businesspartner = lv_bp
-        IMPORTING
-          centraldata     = ls_cent
-        TABLES
-          return          = lt_msg.
-
-      IF ls_cent-centralarchivingflag = 'X'.
+      DATA(ls_archived) = zcl_bp236_validation=>check_bp_not_archived(
+                                iv_bp = lv_bp
+                                iv_action = zcl_bp236_validation=>c_action_delete
+      ).
+      IF ls_archived-is_archived = abap_true.
         APPEND VALUE #(
-          %key = VALUE #( partner = <k>-partner )
-          %msg = new_message_with_text(
-                   severity = if_abap_behv_message=>severity-success
-                   text     = |Business Partner { lv_bp } is already archived.| ) )
-          TO reported-bussinesspartner.
-        CONTINUE.
+            %key = VALUE #( partner = <k>-partner )
+            %msg = new_message_with_text(
+                    severity = if_abap_behv_message=>severity-error
+                    text = ls_archived-error_message
+             ) ) TO reported-bussinesspartner.
       ENDIF.
 
       " archive via change (set flag + X)
@@ -533,12 +538,23 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
         IMPORTING
           output = lv_bpartner.
 
-      "check address
-      SELECT SINGLE addrnumber
-        INTO lv_addressnum
-        FROM but020
-        WHERE partner = lv_bpartner.
-      IF sy-subrc <> 0.
+      "check archived
+      DATA(ls_archived) = zcl_bp236_validation=>check_bp_not_archived(
+                                            iv_bp = lv_bpartner
+                                            iv_action = zcl_bp236_validation=>c_action_create ).
+      IF ls_archived-is_archived = abap_true.
+        APPEND VALUE #(
+            %key = ls_entity-%key
+            %msg = new_message_with_text(
+                     severity = if_abap_behv_message=>severity-error
+                     text = ls_archived-error_message
+             ) ) TO reported-role.
+        CONTINUE.
+      ENDIF.
+
+      "check address exists or not
+      DATA(ls_address) = zcl_bp236_validation=>check_bp_address( iv_bp = lv_bpartner ).
+      IF ls_address-exists = abap_false.
         APPEND VALUE #(
             %key = ls_entity-%key
             %msg = new_message_with_text(
@@ -725,23 +741,18 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
         IMPORTING
           output = lv_bp.
 
-      " Chặn nếu archived theo BAPI
-      CLEAR: ls_cent, lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-        EXPORTING
-          businesspartner = lv_bp
-        IMPORTING
-          centraldata     = ls_cent
-        TABLES
-          return          = lt_msg.
-
-      IF ls_cent-centralarchivingflag = 'X'.
+      "check archived
+      DATA(ls_archived) = zcl_bp236_validation=>check_bp_not_archived(
+            iv_bp = lv_bp
+            iv_action = zcl_bp236_validation=>c_action_create
+      ).
+      IF ls_archived-is_archived = abap_true.
+        APPEND VALUE #( %key = VALUE #( partner = ls_parent-partner ) ) TO failed-bussinesspartner.
         APPEND VALUE #(
-          %key = ls_parent-%key
-          %msg = new_message_with_text(
-                   severity = if_abap_behv_message=>severity-error
-                   text     = |Business Partner { lv_bp } is archived. Cannot add address.| ) )
-        TO reported-addr.
+                %msg = new_message_with_text(
+                        severity = if_abap_behv_message=>severity-error
+                        text     = ls_archived-error_message )
+        ) TO reported-role.
         CONTINUE.
       ENDIF.
 
@@ -869,6 +880,33 @@ CLASS lhc_role IMPLEMENTATION.
         IMPORTING
           output = lv_bpartner.
 
+      "check archived
+      DATA(ls_archived) = zcl_bp236_validation=>check_bp_not_archived(
+            iv_bp = lv_bpartner
+            iv_action = zcl_bp236_validation=>c_action_create
+      ).
+      IF ls_archived-is_archived = abap_true.
+        APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-bussinesspartner.
+        APPEND VALUE #(
+                %msg = new_message_with_text(
+                        severity = if_abap_behv_message=>severity-error
+                        text     = ls_archived-error_message )
+        ) TO reported-role.
+        CONTINUE.
+      ENDIF.
+
+      "check address exists or not
+      DATA(ls_address) = zcl_bp236_validation=>check_bp_address( iv_bp = lv_bpartner ).
+      IF ls_address-exists = abap_false.
+        APPEND VALUE #(
+            %key = ls_entity-%key
+            %msg = new_message_with_text(
+                     severity = if_abap_behv_message=>severity-error
+                     text     = |Create Address for BP First.| )
+          ) TO reported-role.
+        CONTINUE.
+      ENDIF.
+
       lv_role = ls_entity-rltyp.
       lv_dfval = ls_entity-dfval.
 
@@ -977,22 +1015,22 @@ CLASS lhc_role IMPLEMENTATION.
         IMPORTING
           output = lv_bp.
 
+      "check bp is archived or not
       CLEAR: ls_cent, lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-        EXPORTING
-          businesspartner = lv_bp
-        IMPORTING
-          centraldata     = ls_cent
-        TABLES
-          return          = lt_msg.
-      IF ls_cent-centralarchivingflag = 'X'.
-        APPEND VALUE #( %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp ) )
-          TO failed-role.
+      DATA(ls_check) = zcl_bp236_validation=>check_bp_not_archived(
+                    iv_bp     = lv_bp
+                    iv_action = zcl_bp236_validation=>c_action_update ).
+
+      IF ls_check-is_archived = abap_true.
+        APPEND VALUE #(
+            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+        ) TO failed-role.
+
         APPEND VALUE #(
           %msg = new_message_with_text(
-                   severity = if_abap_behv_message=>severity-error
-                   text     = |BP { lv_bp } is archived. Cannot update role.| ) )
-          TO reported-role.
+                    severity = if_abap_behv_message=>severity-error
+                    text     = ls_check-error_message )
+        ) TO reported-role.
         CONTINUE.
       ENDIF.
 
@@ -1070,63 +1108,63 @@ CLASS lhc_role IMPLEMENTATION.
       ENDIF.
 
 *      " delete old
-*      CLEAR lt_msg.
-*      CALL FUNCTION 'BAPI_BUPA_ROLE_REMOVE'
-*        EXPORTING
-*          businesspartner          = lv_bp
-*          businesspartnerrole      = lv_role
-*        TABLES
-*          return                   = lt_msg.
-*
-*      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-*        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
-*          APPEND VALUE #(
-*            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
-*            %msg = new_message(
-*                     id       = ls_msg-id
-*                     number   = ls_msg-number
-*                     severity = if_abap_behv_message=>severity-error
-*                     v1       = ls_msg-message_v1
-*                     v2       = ls_msg-message_v2
-*                     v3       = ls_msg-message_v3
-*                     v4       = ls_msg-message_v4 ) )
-*          TO reported-role.
-*        ENDLOOP.
-*        CONTINUE.
-*      ELSE.
-**        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
-*      ENDIF.
-*
-*      " add new
-*      CLEAR lt_msg.
-*      CALL FUNCTION 'BAPI_BUPA_ROLE_ADD_2'
-*        EXPORTING
-*          businesspartner          = lv_bp
-*          businesspartnerrole      = lv_role
-*          differentiationtypevalue = lv_dfval_new
-*          validfromdate            = lv_from_new
-*          validuntildate           = lv_to_new
-*        TABLES
-*          return                   = lt_msg.
-*
-*      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-*        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
-*          APPEND VALUE #(
-*            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
-*            %msg = new_message(
-*                     id       = ls_msg-id
-*                     number   = ls_msg-number
-*                     severity = if_abap_behv_message=>severity-error
-*                     v1       = ls_msg-message_v1
-*                     v2       = ls_msg-message_v2
-*                     v3       = ls_msg-message_v3
-*                     v4       = ls_msg-message_v4 ) )
-*          TO reported-role.
-*        ENDLOOP.
-*        CONTINUE.
-*      ELSE.
-**        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
-*      ENDIF.
+      CLEAR lt_msg.
+      CALL FUNCTION 'BAPI_BUPA_ROLE_REMOVE'
+        EXPORTING
+          businesspartner     = lv_bp
+          businesspartnerrole = lv_role
+        TABLES
+          return              = lt_msg.
+
+      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #(
+            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+            %msg = new_message(
+                     id       = ls_msg-id
+                     number   = ls_msg-number
+                     severity = if_abap_behv_message=>severity-error
+                     v1       = ls_msg-message_v1
+                     v2       = ls_msg-message_v2
+                     v3       = ls_msg-message_v3
+                     v4       = ls_msg-message_v4 ) )
+          TO reported-role.
+        ENDLOOP.
+        CONTINUE.
+      ELSE.
+*        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+      ENDIF.
+
+      " add new
+      CLEAR lt_msg.
+      CALL FUNCTION 'BAPI_BUPA_ROLE_ADD_2'
+        EXPORTING
+          businesspartner          = lv_bp
+          businesspartnerrole      = lv_role
+          differentiationtypevalue = lv_dfval_new
+          validfromdate            = lv_from_new
+          validuntildate           = lv_to_new
+        TABLES
+          return                   = lt_msg.
+
+      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #(
+            %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
+            %msg = new_message(
+                     id       = ls_msg-id
+                     number   = ls_msg-number
+                     severity = if_abap_behv_message=>severity-error
+                     v1       = ls_msg-message_v1
+                     v2       = ls_msg-message_v2
+                     v3       = ls_msg-message_v3
+                     v4       = ls_msg-message_v4 ) )
+          TO reported-role.
+        ENDLOOP.
+        CONTINUE.
+      ELSE.
+*        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+      ENDIF.
 
       APPEND VALUE #(
         %key = VALUE #( partner = <e>-partner rltyp = <e>-rltyp )
@@ -1136,7 +1174,6 @@ CLASS lhc_role IMPLEMENTATION.
       TO reported-role.
     ENDLOOP.
   ENDMETHOD.
-
 
   METHOD delete.
 
@@ -1169,23 +1206,22 @@ CLASS lhc_role IMPLEMENTATION.
         IMPORTING
           output = lv_bp.
 
-      " block if archived
+      "check bp is archived or not
       CLEAR: ls_cent, lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-        EXPORTING
-          businesspartner = lv_bp
-        IMPORTING
-          centraldata     = ls_cent
-        TABLES
-          return          = lt_msg.
-      IF ls_cent-centralarchivingflag = 'X'.
-        APPEND VALUE #( %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp ) )
-          TO failed-role.
+      DATA(ls_check) = zcl_bp236_validation=>check_bp_not_archived(
+                    iv_bp     = lv_bp
+                    iv_action = zcl_bp236_validation=>c_action_delete ).
+
+      IF ls_check-is_archived = abap_true.
+        APPEND VALUE #(
+            %key = VALUE #( partner = <k>-partner rltyp = <k>-rltyp )
+        ) TO failed-role.
+
         APPEND VALUE #(
           %msg = new_message_with_text(
-                   severity = if_abap_behv_message=>severity-error
-                   text     = |BP { lv_bp } is archived. Cannot delete role.| ) )
-          TO reported-role.
+                    severity = if_abap_behv_message=>severity-error
+                    text     = ls_check-error_message )
+        ) TO reported-role.
         CONTINUE.
       ENDIF.
 
@@ -1532,32 +1568,32 @@ CLASS lhc_addr IMPLEMENTATION.
         ls_addr-c_o_name   = <e>-namecompany. ls_addrx-c_o_name   = 'X'.
       ENDIF.
 
-*      " change
-*      CLEAR lt_msg.
-*      CALL FUNCTION 'BAPI_BUPA_ADDRESS_CHANGE'
-*        EXPORTING
-*          businesspartner = lv_bp
-*          addressdata     = ls_addr
-*          addressdata_x   = ls_addrx
-*        TABLES
-*          return          = lt_msg.
-*
-*      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-*        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
-*          APPEND VALUE #(
-*            %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber )
-*            %msg = new_message(
-*                     id       = ls_msg-id
-*                     number   = ls_msg-number
-*                     severity = if_abap_behv_message=>severity-error
-*                     v1       = ls_msg-message_v1
-*                     v2       = ls_msg-message_v2
-*                     v3       = ls_msg-message_v3
-*                     v4       = ls_msg-message_v4 ) )
-*          TO reported-addr.
-*        ENDLOOP.
-*        CONTINUE.
-*      ENDIF.
+      " change
+      CLEAR lt_msg.
+      CALL FUNCTION 'BAPI_BUPA_ADDRESS_CHANGE'
+        EXPORTING
+          businesspartner = lv_bp
+          addressdata     = ls_addr
+          addressdata_x   = ls_addrx
+        TABLES
+          return          = lt_msg.
+
+      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
+        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #(
+            %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber )
+            %msg = new_message(
+                     id       = ls_msg-id
+                     number   = ls_msg-number
+                     severity = if_abap_behv_message=>severity-error
+                     v1       = ls_msg-message_v1
+                     v2       = ls_msg-message_v2
+                     v3       = ls_msg-message_v3
+                     v4       = ls_msg-message_v4 ) )
+          TO reported-addr.
+        ENDLOOP.
+        CONTINUE.
+      ENDIF.
 
 
       APPEND VALUE #(
