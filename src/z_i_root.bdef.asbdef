@@ -31,7 +31,7 @@
    create;
    update;
    delete;
-   field ( readonly ) Partner;
+   field ( readonly ) Partner, DeletionFlag;
    association _Role { create; }
    association _Addr { create; }
  }
@@ -52,7 +52,7 @@
    create;
    update;
    delete;
-   field ( readonly ) Partner;
+   field ( readonly ) Partner, RoleName;
    association _Root;
  }
 

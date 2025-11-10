@@ -51,6 +51,10 @@ annotate entity Z_C_ADDR with
   @UI.lineItem: [{ position: 90 }]
   @UI.identification: [{ position: 90 }]
   HouseNumber;
+  
+  @UI.lineItem: [{ position: 90 }]
+  @UI.identification: [{ position: 90 }]
+  StandardAddress;
 
 
 }

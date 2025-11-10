@@ -16,5 +16,6 @@ define view entity Z_I_ADRR
       a.city1      as City,
       a.name_co    as NameCompany,
       a.house_num1 as HouseNumber,
+      b.xdfadr as StandardAddress,
       _Root
 }

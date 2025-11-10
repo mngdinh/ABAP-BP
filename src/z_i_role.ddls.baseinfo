@@ -3,7 +3,8 @@
 {
 "FROM":
 [
-"BUT100"
+"BUT100",
+"TB003T"
 ],
 "ASSOCIATED":
 [

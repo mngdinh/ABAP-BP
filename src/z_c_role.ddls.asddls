@@ -7,8 +7,11 @@ define view entity Z_C_ROLE as projection on Z_I_ROLE
     key Partner,
     key Rltyp,
     key Dfval,
+    
+    @Semantics.dateTime: true
     ValidFrom,
     ValidTo,
+    RoleName,
     /* Associations */
     _Root: redirected to parent Z_C_ROOT
 }

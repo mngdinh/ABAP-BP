@@ -14,6 +14,7 @@ define view entity Z_C_ADDR
       City,
       NameCompany,
       HouseNumber,
+      StandardAddress,
       /* Associations */
       _Root : redirected to parent Z_C_ROOT
 }

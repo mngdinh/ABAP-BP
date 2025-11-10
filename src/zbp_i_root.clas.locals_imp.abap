@@ -65,6 +65,53 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
     LOOP AT entities INTO DATA(ls_entity).
       CLEAR: ls_head, ls_central, ls_central_person, ls_central_org, lt_msg.
 
+      "check type is null or wrong value
+      IF ls_entity-type IS NOT INITIAL."not null
+        IF ls_entity-type <> '1' AND
+           ls_entity-type <> '2' AND
+           ls_entity-type <> '3'.
+          APPEND VALUE #(
+           %cid = ls_entity-%cid
+           %msg = new_message_with_text(
+                           severity = if_abap_behv_message=>severity-error
+                           text     = |Type Error. Check Type Again.| )
+           ) TO reported-bussinesspartner.
+          CONTINUE.
+        ENDIF.
+      ELSE.
+        APPEND VALUE #(
+           %cid = ls_entity-%cid
+           %msg = new_message_with_text(
+                           severity = if_abap_behv_message=>severity-error
+                           text     = |Don't place Type null. Enter a value.| )
+           ) TO reported-bussinesspartner.
+        CONTINUE.
+      ENDIF.
+
+      "check bugroup null or not
+      IF ls_entity-bugroup IS INITIAL.
+        APPEND VALUE #(
+           %cid = ls_entity-%cid
+           %msg = new_message_with_text(
+                           severity = if_abap_behv_message=>severity-error
+                           text     = |BU_GROUP is required.| )
+           ) TO reported-bussinesspartner.
+        CONTINUE.
+      ENDIF.
+      "check bugroup exist or not
+      SELECT bu_group FROM tb001 INTO @DATA(lv_bugr)
+        WHERE bu_group = @ls_entity-bugroup.
+      ENDSELECT.
+      IF sy-subrc <> 0.
+        APPEND VALUE #(
+           %cid = ls_entity-%cid
+           %msg = new_message_with_text(
+                           severity = if_abap_behv_message=>severity-error
+                           text     = |Wrong type BU_GROUP. Check again.| )
+           ) TO reported-bussinesspartner.
+        CONTINUE.
+      ENDIF.
+
       ls_head-partn_cat = ls_entity-type.
       ls_head-partn_grp = ls_entity-bugroup.
       ls_central-searchterm1 = ls_entity-busort1.
@@ -781,6 +828,7 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
         ls_bapiaddr-langu       = sy-langu.
         ls_bapiaddr-validfromdate  = sy-datum.
         ls_bapiaddr-validtodate = '99991231'.
+        ls_bapiaddr-standardaddress = abap_true.
 
         " Gọi BAPI tạo địa chỉ
         CLEAR lt_msg.
@@ -1432,6 +1480,7 @@ CLASS lhc_addr IMPLEMENTATION.
       ls_addrdata-langu       = sy-langu.
       ls_addrdata-validfromdate  = sy-datum.
       ls_addrdata-validtodate = '99991231'.
+      ls_addrdata-standardaddress = 'X'.
 
       "Gọi BAPI
       CALL FUNCTION 'BAPI_BUPA_ADDRESS_ADD'
@@ -1484,135 +1533,17 @@ CLASS lhc_addr IMPLEMENTATION.
 
   METHOD update.
 
-    DATA: lv_bp     TYPE bapibus1006_head-bpartner,
-          lv_addrno TYPE ad_addrnum,
-          ls_cent   TYPE bapibus1006_central,
-          lt_msg    TYPE TABLE OF bapiret2,
-          ls_msg    TYPE bapiret2,
-          ls_addr   TYPE bapibus1006_address,
-          ls_addrx  TYPE bapibus1006_address_x.
 
-    LOOP AT entities ASSIGNING FIELD-SYMBOL(<e>).
-
-      " validate key
-      IF <e>-partner IS INITIAL OR <e>-addrnumber IS INITIAL.
-        APPEND VALUE #(
-          %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber ) )
-          TO failed-addr.
-        APPEND VALUE #(
-          %msg = new_message_with_text(
-                   severity = if_abap_behv_message=>severity-error
-                   text     = 'Missing key Partner or Addrnumber.' ) )
-          TO reported-addr.
-        CONTINUE.
-      ENDIF.
-
-      " normalize BP
-      lv_bp     = <e>-partner.
-      lv_addrno = <e>-addrnumber.
-      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
-        EXPORTING
-          input  = lv_bp
-        IMPORTING
-          output = lv_bp.
-
-      " block if archived
-      CLEAR: ls_cent, lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-        EXPORTING
-          businesspartner = lv_bp
-        IMPORTING
-          centraldata     = ls_cent
-        TABLES
-          return          = lt_msg.
-      IF ls_cent-centralarchivingflag = 'X'.
-        APPEND VALUE #(
-          %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber ) )
-          TO failed-addr.
-        APPEND VALUE #(
-          %msg = new_message_with_text(
-                   severity = if_abap_behv_message=>severity-error
-                   text     = |BP { lv_bp } is archived. Cannot update address.| ) )
-          TO reported-addr.
-        CONTINUE.
-      ENDIF.
-
-      " map fields & flags
-      CLEAR: ls_addr, ls_addrx.
-
-      IF <e>-country IS NOT INITIAL.
-        ls_addr-country    = <e>-country.
-        ls_addrx-country    = 'X'.
-      ENDIF.
-      IF <e>-region IS NOT INITIAL.
-        ls_addr-region     = <e>-region.
-        ls_addrx-region     = 'X'.
-      ENDIF.
-      IF <e>-postalcode IS NOT INITIAL.
-        ls_addr-postl_cod1 = <e>-postalcode.
-        ls_addrx-postl_cod1 = 'X'.
-      ENDIF.
-      IF <e>-street IS NOT INITIAL.
-        ls_addr-street     = <e>-street.
-        ls_addrx-street     = 'X'.
-      ENDIF.
-      IF <e>-city IS NOT INITIAL.
-        ls_addr-city       = <e>-city.
-        ls_addrx-city       = 'X'.
-      ENDIF.
-      IF <e>-housenumber IS NOT INITIAL.
-        ls_addr-house_no   = <e>-housenumber.
-        ls_addrx-house_no   = 'X'.
-      ENDIF.
-      IF <e>-namecompany IS NOT INITIAL.
-        ls_addr-c_o_name   = <e>-namecompany. ls_addrx-c_o_name   = 'X'.
-      ENDIF.
-
-      " change
-      CLEAR lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_ADDRESS_CHANGE'
-        EXPORTING
-          businesspartner = lv_bp
-          addressdata     = ls_addr
-          addressdata_x   = ls_addrx
-        TABLES
-          return          = lt_msg.
-
-      IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
-        LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
-          APPEND VALUE #(
-            %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber )
-            %msg = new_message(
-                     id       = ls_msg-id
-                     number   = ls_msg-number
-                     severity = if_abap_behv_message=>severity-error
-                     v1       = ls_msg-message_v1
-                     v2       = ls_msg-message_v2
-                     v3       = ls_msg-message_v3
-                     v4       = ls_msg-message_v4 ) )
-          TO reported-addr.
-        ENDLOOP.
-        CONTINUE.
-      ENDIF.
-
-
-      APPEND VALUE #(
-        %key = VALUE #( partner = <e>-partner addrnumber = <e>-addrnumber )
-        %msg = new_message_with_text(
-                 severity = if_abap_behv_message=>severity-success
-                 text     = |Address { lv_addrno } updated for BP { lv_bp }.| ) )
-      TO reported-addr.
-    ENDLOOP.
   ENDMETHOD.
 
 
   METHOD delete.
 
-    DATA: lv_bp     TYPE bapibus1006_head-bpartner,
-          lv_addrno TYPE but020-guid,
-          ls_cent   TYPE bapibus1006_central,
-          lt_msg    TYPE TABLE OF bapiret2,
-          ls_msg    TYPE bapiret2.
+    DATA: lv_bp   TYPE bapibus1006_head-bpartner,
+          lv_guid TYPE but020-guid,
+          ls_cent TYPE bapibus1006_central,
+          lt_msg  TYPE TABLE OF bapiret2,
+          ls_msg  TYPE bapiret2.
 
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<k>).
 
@@ -1654,13 +1585,16 @@ CLASS lhc_addr IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
+      SELECT address_guid FROM but020 WHERE partner = @lv_bp AND addrnumber = @<k>-addrnumber
+      INTO @DATA(lv_guid_020).
+      ENDSELECT.
+      lv_guid = lv_guid_020.
       " remove
-      lv_addrno = ''.
       CLEAR lt_msg.
       CALL FUNCTION 'BAPI_BUPA_ADDRESS_REMOVE'
         EXPORTING
           businesspartner = lv_bp
-          addressguid     = lv_addrno
+          addressguid     = lv_guid
         TABLES
           return          = lt_msg.
 
@@ -1685,7 +1619,7 @@ CLASS lhc_addr IMPLEMENTATION.
         %key = VALUE #( partner = <k>-partner addrnumber = <k>-addrnumber )
         %msg = new_message_with_text(
                  severity = if_abap_behv_message=>severity-success
-                 text     = |Address { lv_addrno } removed from BP { lv_bp }.| ) )
+                 text     = |Address { <k>-addrnumber  } removed from BP { lv_bp }.| ) )
       TO reported-addr.
 
     ENDLOOP.

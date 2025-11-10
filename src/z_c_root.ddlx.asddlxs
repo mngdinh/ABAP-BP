@@ -113,7 +113,6 @@ annotate entity Z_C_ROOT with
   Chtim;
 
   @UI.identification: [{ position: 90 }]
-  @UI.hidden: true
   DeletionFlag;
   /* Associations */
   //    _Role;
