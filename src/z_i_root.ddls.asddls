@@ -27,3 +27,4 @@ define root view entity Z_I_ROOT
     _Role,
     _Addr
 }
+where xdele <> 'X';

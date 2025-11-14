@@ -25,7 +25,7 @@
      Chusr = chusr;
      Chdat = chdat;
      Chtim = chtim;
-     DeletionFlag = xdele;
+//     DeletionFlag = xdele;
    }
 
    create;

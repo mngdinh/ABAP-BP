@@ -65,49 +65,19 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
     LOOP AT entities INTO DATA(ls_entity).
       CLEAR: ls_head, ls_central, ls_central_person, ls_central_org, lt_msg.
 
-      "check type is null or wrong value
-      IF ls_entity-type IS NOT INITIAL."not null
-        IF ls_entity-type <> '1' AND
-           ls_entity-type <> '2' AND
-           ls_entity-type <> '3'.
-          APPEND VALUE #(
-           %cid = ls_entity-%cid
-           %msg = new_message_with_text(
-                           severity = if_abap_behv_message=>severity-error
-                           text     = |Type Error. Check Type Again.| )
-           ) TO reported-bussinesspartner.
-          CONTINUE.
-        ENDIF.
-      ELSE.
+      "validate
+      DATA(ls_root) = CORRESPONDING z_i_root( ls_entity ).
+      DATA(ls_val) = zcl_bp236_validation=>validate_create_bp( e = ls_root ).
+      IF ls_val-is_fault = abap_true.
+        APPEND VALUE #(
+              %cid        = ls_entity-%cid
+              %fail-cause = if_abap_behv=>cause-unspecific
+            ) TO failed-bussinesspartner.
         APPEND VALUE #(
            %cid = ls_entity-%cid
            %msg = new_message_with_text(
                            severity = if_abap_behv_message=>severity-error
-                           text     = |Don't place Type null. Enter a value.| )
-           ) TO reported-bussinesspartner.
-        CONTINUE.
-      ENDIF.
-
-      "check bugroup null or not
-      IF ls_entity-bugroup IS INITIAL.
-        APPEND VALUE #(
-           %cid = ls_entity-%cid
-           %msg = new_message_with_text(
-                           severity = if_abap_behv_message=>severity-error
-                           text     = |BU_GROUP is required.| )
-           ) TO reported-bussinesspartner.
-        CONTINUE.
-      ENDIF.
-      "check bugroup exist or not
-      SELECT bu_group FROM tb001 INTO @DATA(lv_bugr)
-        WHERE bu_group = @ls_entity-bugroup.
-      ENDSELECT.
-      IF sy-subrc <> 0.
-        APPEND VALUE #(
-           %cid = ls_entity-%cid
-           %msg = new_message_with_text(
-                           severity = if_abap_behv_message=>severity-error
-                           text     = |Wrong type BU_GROUP. Check again.| )
+                           text     = ls_val-error_message )
            ) TO reported-bussinesspartner.
         CONTINUE.
       ENDIF.
@@ -146,6 +116,10 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
             OR line_exists( lt_msg[ type = 'A' ] ).
         LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
           APPEND VALUE #(
+              %cid        = ls_entity-%cid
+              %fail-cause = if_abap_behv=>cause-unspecific
+            ) TO failed-bussinesspartner.
+          APPEND VALUE #(
           %cid = ls_entity-%cid
           %msg = new_message_with_text(
                             severity = if_abap_behv_message=>severity-error
@@ -158,7 +132,6 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
             %cid = ls_entity-%cid
             partner = lv_bpartner
          ) TO mapped-bussinesspartner.
-
         "success msg
         APPEND VALUE #(
             %cid = ls_entity-%cid
@@ -288,6 +261,7 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
 
       IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
         LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #( %key = VALUE #( partner = <e>-partner ) ) TO failed-bussinesspartner.
           APPEND VALUE #(
             %key = VALUE #( partner = <e>-partner )
             %msg = new_message(
@@ -401,64 +375,135 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD read.
+*  METHOD read.
+*
+*    DATA: lt_msg TYPE TABLE OF bapiret2,
+*          ls_det TYPE bapibus1006_central,
+*          lv_bp  TYPE bapibus1006_head-bpartner.
+*
+*    LOOP AT keys ASSIGNING FIELD-SYMBOL(<k>).
+*
+*      IF <k>-partner IS INITIAL.
+*        CONTINUE.
+*      ENDIF.
+*
+*      lv_bp = <k>-partner.
+*      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*        EXPORTING
+*          input  = lv_bp
+*        IMPORTING
+*          output = lv_bp.
+*
+*      "lấy central để biết có archived không
+*      CLEAR: ls_det, lt_msg.
+*      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
+*        EXPORTING
+*          businesspartner = lv_bp
+*        IMPORTING
+*          centraldata     = ls_det
+*        TABLES
+*          return          = lt_msg.
+*
+*      "bỏ qua archived (nếu muốn vẫn trả về thì bỏ điều kiện này)
+*      IF ls_det-centralarchivingflag = 'X'.
+*        CONTINUE.
+*      ENDIF.
+*
+*      "đọc BUT000 để map trả về như cũ  (KHÔNG cần xdele nữa)
+*      SELECT SINGLE partner, type, bu_group, bu_sort1, bu_sort2, title,
+*                     name_org1, name_org2, name_last, name_first, namemiddle,
+*                     crusr, crdat, crtim, chusr, chdat, chtim
+*        FROM but000
+*        WHERE partner = @lv_bp
+*        INTO @DATA(ls_bu).
+*      IF sy-subrc <> 0.
+*        CONTINUE.
+*      ENDIF.
+*      DATA lv_del TYPE c LENGTH 1.
+*      IF ls_det-centralarchivingflag = 'X'.
+*        lv_del = 'X'.
+*      ELSE.
+*        CLEAR lv_del.
+*      ENDIF.
+*
+*
+*      "KHÔNG double-check xdele nữa – ta tin theo centralarchivingflag
+**       IF ls_bu-xdele = 'X'.
+**         CONTINUE.
+**       ENDIF.
+*
+*      "CHANGED: map deletionflag từ centralarchivingflag (BAPI)
+*      APPEND VALUE #(
+*        partner      = ls_bu-partner
+*        type         = ls_bu-type
+*        bugroup      = ls_bu-bu_group
+*        busort1      = ls_bu-bu_sort1
+*        busort2      = ls_bu-bu_sort2
+*        title        = ls_bu-title
+*        nameorg1     = ls_bu-name_org1
+*        nameorg2     = ls_bu-name_org2
+*        namelast     = ls_bu-name_last
+*        namefirst    = ls_bu-name_first
+*        namemiddle   = ls_bu-namemiddle
+*        crusr        = ls_bu-crusr
+*        crdat        = ls_bu-crdat
+*        crtim        = ls_bu-crtim
+*        chusr        = ls_bu-chusr
+*        chdat        = ls_bu-chdat
+*        chtim        = ls_bu-chtim
+*        deletionflag = lv_del )
+*      TO result.
+*
+*    ENDLOOP.
+*
+*  ENDMETHOD.
 
-    DATA: lt_msg TYPE TABLE OF bapiret2,
-          ls_det TYPE bapibus1006_central,
-          lv_bp  TYPE bapibus1006_head-bpartner.
+  METHOD read.
 
     LOOP AT keys ASSIGNING FIELD-SYMBOL(<k>).
 
+      " --- Bỏ qua key rỗng
       IF <k>-partner IS INITIAL.
         CONTINUE.
       ENDIF.
 
-      lv_bp = <k>-partner.
+      " --- Chuẩn hoá partner về dạng ALPHA 10 ký tự
+      DATA(lv_bp) = <k>-partner.
       CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
         EXPORTING
           input  = lv_bp
         IMPORTING
           output = lv_bp.
 
-      "lấy central để biết có archived không
-      CLEAR: ls_det, lt_msg.
-      CALL FUNCTION 'BAPI_BUPA_CENTRAL_GETDETAIL'
-        EXPORTING
-          businesspartner = lv_bp
-        IMPORTING
-          centraldata     = ls_det
-        TABLES
-          return          = lt_msg.
+      " --- Gọi class validate để kiểm tra archived (xoá mềm)
+      DATA(ls_check) = zcl_bp236_validation=>check_bp_not_archived(
+                         iv_bp     = lv_bp
+                         iv_action = zcl_bp236_validation=>c_action_read ).
 
-      "bỏ qua archived (nếu muốn vẫn trả về thì bỏ điều kiện này)
-      IF ls_det-centralarchivingflag = 'X'.
+      IF ls_check-is_archived = abap_true.
+        " Nếu archived thì không trả về kết quả
         CONTINUE.
       ENDIF.
 
-      "đọc BUT000 để map trả về như cũ  (KHÔNG cần xdele nữa)
-      SELECT SINGLE partner, type, bu_group, bu_sort1, bu_sort2, title,
-                     name_org1, name_org2, name_last, name_first, namemiddle,
-                     crusr, crdat, crtim, chusr, chdat, chtim
+      " --- Đọc dữ liệu gốc từ BUT000
+      SELECT SINGLE
+             partner, type, bu_group, bu_sort1, bu_sort2, title,
+             name_org1, name_org2, name_last, name_first, namemiddle,
+             crusr, crdat, crtim, chusr, chdat, chtim, xdele
         FROM but000
         WHERE partner = @lv_bp
         INTO @DATA(ls_bu).
+
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
-      DATA lv_del TYPE c LENGTH 1.
-      IF ls_det-centralarchivingflag = 'X'.
-        lv_del = 'X'.
-      ELSE.
-        CLEAR lv_del.
+
+      IF ls_bu-xdele = 'X'.
+        CONTINUE.
       ENDIF.
 
 
-      "KHÔNG double-check xdele nữa – ta tin theo centralarchivingflag
-*       IF ls_bu-xdele = 'X'.
-*         CONTINUE.
-*       ENDIF.
-
-      "CHANGED: map deletionflag từ centralarchivingflag (BAPI)
+      " --- Append vào result (ẩn DeletionFlag)
       APPEND VALUE #(
         partner      = ls_bu-partner
         type         = ls_bu-type
@@ -477,8 +522,8 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
         chusr        = ls_bu-chusr
         chdat        = ls_bu-chdat
         chtim        = ls_bu-chtim
-        deletionflag = lv_del )
-      TO result.
+        deletionflag = abap_false ) " ẩn archived
+        TO result.
 
     ENDLOOP.
 
@@ -590,6 +635,7 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
                                             iv_bp = lv_bpartner
                                             iv_action = zcl_bp236_validation=>c_action_create ).
       IF ls_archived-is_archived = abap_true.
+        APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-role.
         APPEND VALUE #(
             %key = ls_entity-%key
             %msg = new_message_with_text(
@@ -602,6 +648,7 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
       "check address exists or not
       DATA(ls_address) = zcl_bp236_validation=>check_bp_address( iv_bp = lv_bpartner ).
       IF ls_address-exists = abap_false.
+        APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-role.
         APPEND VALUE #(
             %key = ls_entity-%key
             %msg = new_message_with_text(
@@ -656,6 +703,7 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
             OR line_exists( lt_msg[ type = 'A' ] ).
 
           LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+            APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-role.
             APPEND VALUE #(
               %key = ls_entity-%key
               %msg = new_message(
@@ -779,6 +827,13 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
       " Partner cha
       lv_bp = ls_parent-partner.
       IF lv_bp IS INITIAL.
+        APPEND VALUE #( %key = VALUE #( partner = ls_parent-partner ) ) TO failed-addr.
+        APPEND VALUE #(
+                %msg = new_message_with_text(
+                        severity = if_abap_behv_message=>severity-error
+                        text     = |Partner is required.| )
+        ) TO reported-addr.
+        CONTINUE.
         CONTINUE.
       ENDIF.
 
@@ -794,12 +849,12 @@ CLASS lhc_bussinesspartner IMPLEMENTATION.
             iv_action = zcl_bp236_validation=>c_action_create
       ).
       IF ls_archived-is_archived = abap_true.
-        APPEND VALUE #( %key = VALUE #( partner = ls_parent-partner ) ) TO failed-bussinesspartner.
+        APPEND VALUE #( %key = VALUE #( partner = ls_parent-partner ) ) TO failed-addr.
         APPEND VALUE #(
                 %msg = new_message_with_text(
                         severity = if_abap_behv_message=>severity-error
                         text     = ls_archived-error_message )
-        ) TO reported-role.
+        ) TO reported-addr.
         CONTINUE.
       ENDIF.
 
@@ -921,6 +976,17 @@ CLASS lhc_role IMPLEMENTATION.
 
       lv_bpartner = ls_entity-partner.
 
+      "check initial partner
+      IF lv_bpartner IS INITIAL.
+        APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-role.
+        APPEND VALUE #(
+                %msg = new_message_with_text(
+                        severity = if_abap_behv_message=>severity-error
+                        text     = |Partner is required.| )
+        ) TO reported-role.
+        CONTINUE.
+      ENDIF.
+
       "Convert BP to 10 char
       CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
         EXPORTING
@@ -934,7 +1000,7 @@ CLASS lhc_role IMPLEMENTATION.
             iv_action = zcl_bp236_validation=>c_action_create
       ).
       IF ls_archived-is_archived = abap_true.
-        APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-bussinesspartner.
+        APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-role.
         APPEND VALUE #(
                 %msg = new_message_with_text(
                         severity = if_abap_behv_message=>severity-error
@@ -946,6 +1012,7 @@ CLASS lhc_role IMPLEMENTATION.
       "check address exists or not
       DATA(ls_address) = zcl_bp236_validation=>check_bp_address( iv_bp = lv_bpartner ).
       IF ls_address-exists = abap_false.
+        APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-role.
         APPEND VALUE #(
             %key = ls_entity-%key
             %msg = new_message_with_text(
@@ -997,8 +1064,8 @@ CLASS lhc_role IMPLEMENTATION.
       "error msg
       IF line_exists( lt_msg[ type = 'E' ] )
           OR line_exists( lt_msg[ type = 'A' ] ).
-
         LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #( %key = VALUE #( partner = ls_entity-partner ) ) TO failed-role.
           APPEND VALUE #(
             %key = ls_entity-%key
             %msg = new_message(
@@ -1469,6 +1536,33 @@ CLASS lhc_addr IMPLEMENTATION.
 
       CLEAR ls_addrdata.
 
+      " Partner cha
+      DATA(lv_bp) = ls_cba-%data-partner.
+      IF lv_bp IS INITIAL.
+        APPEND VALUE #( %key = VALUE #( partner = ls_cba-%data-partner ) ) TO failed-addr.
+        APPEND VALUE #(
+                %msg = new_message_with_text(
+                        severity = if_abap_behv_message=>severity-error
+                        text     = |Partner is required.| )
+        ) TO reported-addr.
+        CONTINUE.
+      ENDIF.
+
+      "check archived
+      DATA(ls_archived) = zcl_bp236_validation=>check_bp_not_archived(
+            iv_bp = lv_bp
+            iv_action = zcl_bp236_validation=>c_action_create
+      ).
+      IF ls_archived-is_archived = abap_true.
+        APPEND VALUE #( %key = VALUE #( partner = ls_cba-%data-partner ) ) TO failed-addr.
+        APPEND VALUE #(
+                %msg = new_message_with_text(
+                        severity = if_abap_behv_message=>severity-error
+                        text     = ls_archived-error_message )
+        ) TO reported-addr.
+        CONTINUE.
+      ENDIF.
+
       "Mapping từ RAP entity sang BAPI structure
       ls_addrdata-country     = ls_cba-country.
       ls_addrdata-region      = ls_cba-region.
@@ -1493,6 +1587,7 @@ CLASS lhc_addr IMPLEMENTATION.
       IF line_exists( lt_return[ type = 'E' ] )
            OR line_exists( lt_return[ type = 'A' ] ).
         LOOP AT lt_return INTO ls_return WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #( %key = VALUE #( partner = ls_cba-partner ) ) TO failed-addr.
           APPEND VALUE #(
             %key = ls_cba-%key
             %msg = new_message(
@@ -1600,6 +1695,8 @@ CLASS lhc_addr IMPLEMENTATION.
 
       IF line_exists( lt_msg[ type = 'E' ] ) OR line_exists( lt_msg[ type = 'A' ] ).
         LOOP AT lt_msg INTO ls_msg WHERE type = 'E' OR type = 'A'.
+          APPEND VALUE #( %key = VALUE #( partner = <k>-partner addrnumber = <k>-addrnumber ) )
+          TO failed-addr.
           APPEND VALUE #(
             %key = VALUE #( partner = <k>-partner addrnumber = <k>-addrnumber )
             %msg = new_message(
@@ -1755,8 +1852,98 @@ CLASS lhc_addr IMPLEMENTATION.
 
   ENDMETHOD.
 
-
 ENDCLASS.
+
+*CLASS lhc_bussinesspartner_query DEFINITION FINAL.
+*  PUBLIC SECTION.
+*    INTERFACES if_rap_query_provider.
+*ENDCLASS.
+*
+*
+*CLASS lhc_bussinesspartner_query IMPLEMENTATION.
+*
+*  METHOD if_rap_query_provider~select.
+*    TYPES: BEGIN OF ty_bp_raw,
+*             partner     TYPE bu_partner,
+*             type        TYPE bu_type,
+*             bu_group    TYPE bu_group,
+*             bu_sort1    TYPE bu_sort1,
+*             bu_sort2    TYPE bu_sort2,
+*             title       TYPE ad_title,
+*             name_org1   TYPE bu_name1,
+*             name_org2   TYPE bu_name2,
+*             name_last   TYPE bu_namep_l,
+*             name_first  TYPE bu_namep_f,
+*             namemiddle  TYPE bu_namemid,
+*             crusr       TYPE syuname,
+*             crdat       TYPE sy-datum,
+*             crtim       TYPE sy-uzeit,
+*             chusr       TYPE syuname,
+*             chdat       TYPE sy-datum,
+*             chtim       TYPE sy-uzeit,
+*             xdele       TYPE bu_xdele,
+*           END OF ty_bp_raw.
+*
+*    DATA: lt_raw TYPE STANDARD TABLE OF ty_bp_raw,
+*          lt_out TYPE STANDARD TABLE OF z_i_root,
+*          lv_bp  TYPE bu_partner.
+*
+*    "Lấy các BP chưa archived
+*    SELECT partner, type, bu_group, bu_sort1, bu_sort2, title,
+*           name_org1, name_org2, name_last, name_first, namemiddle,
+*           crusr, crdat, crtim, chusr, chdat, chtim, xdele
+*      FROM but000
+*      WHERE xdele <> 'X'
+*      INTO TABLE @lt_raw.
+*
+*    "Kiểm tra kỹ hơn qua class validate
+*    LOOP AT lt_raw ASSIGNING FIELD-SYMBOL(<bp>).
+*
+*      lv_bp = <bp>-partner.
+*      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*        EXPORTING input = lv_bp
+*        IMPORTING output = lv_bp.
+*
+*      DATA(ls_check) = zcl_bp236_validation=>check_bp_not_archived(
+*                         iv_bp     = lv_bp
+*                         iv_action = zcl_bp236_validation=>c_action_read ).
+*
+*      IF ls_check-is_archived = abap_true.
+*        CONTINUE.
+*      ENDIF.
+*
+*      "Map sang projection
+*      APPEND VALUE z_i_root(
+*        partner      = <bp>-partner
+*        type         = <bp>-type
+*        bugroup      = <bp>-bu_group
+*        busort1      = <bp>-bu_sort1
+*        busort2      = <bp>-bu_sort2
+*        title        = <bp>-title
+*        nameorg1     = <bp>-name_org1
+*        nameorg2     = <bp>-name_org2
+*        namelast     = <bp>-name_last
+*        namefirst    = <bp>-name_first
+*        namemiddle   = <bp>-namemiddle
+*        crusr        = <bp>-crusr
+*        crdat        = <bp>-crdat
+*        crtim        = <bp>-crtim
+*        chusr        = <bp>-chusr
+*        chdat        = <bp>-chdat
+*        chtim        = <bp>-chtim
+*        deletionflag = abap_false
+*      ) TO lt_out.
+*
+*    ENDLOOP.
+*
+*    "Trả dữ liệu
+*    io_response->set_data( lt_out ).
+*    io_response->set_total_number_of_records( lines( lt_out ) ).
+*
+*  ENDMETHOD.
+*
+*ENDCLASS.
+
 
 CLASS lsc_z_i_root DEFINITION INHERITING FROM cl_abap_behavior_saver.
   PROTECTED SECTION.
